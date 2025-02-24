@@ -40,11 +40,11 @@ class GraphVertex(GraphNode):
         """
         Some how the "code" vertex may lack lineno, which makes it invalid.
         """
-        return self.label == "code" and self.props.get("lineno", -1) == -1
+        return self.label == "code" and self.props.get("lineno", 0) == 0
 
     @property
     def lineno(self):
-        return self.props.get("lineno", -1)
+        return self.props.get("lineno", 0)
 
     def generate_pseudo_key(self, lineno: int):
         """

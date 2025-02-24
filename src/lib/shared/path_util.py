@@ -110,3 +110,10 @@ def create_file(path):
         with open(path, "w"):
             pass
     return path
+
+
+def split_path(path):
+    """
+    Split a path into a list of directories.
+    """
+    return path.replace("\\", "/").split("/")

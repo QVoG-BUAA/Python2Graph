@@ -72,8 +72,8 @@ def _add_edge(ctx: CgBuildCtx, caller_id: str, callee_id: str, related_edge: dic
             # if not_appeared_and_add(caller_file, callee_file, related_edge):
             #     ctx.sink.put_edge(GraphEdge("related", caller, callee))
         ctx.sink.put_edge(GraphEdge("cg", callee, caller))
-        if callee_file != caller_file:
-            ctx.sink.put_edge(GraphEdge("dfg", caller, callee))
+        # if callee_file != caller_file:
+        ctx.sink.put_edge(GraphEdge("dfg", caller, callee))
 
         call_back = GraphVertex(
             "code",

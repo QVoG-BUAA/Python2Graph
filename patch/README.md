@@ -1,4 +1,4 @@
-This directory contains patches for the GreNeoGraphQL project.
+This directory contains patches for the `Python2Graph` project.
 
 ## Patch List
 

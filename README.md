@@ -1,6 +1,61 @@
 # Python2Graph
 
-Create a file named config.yaml in the root directory of the project, and fill in the following content:
+Python2Graph is a tool designed to generate a Simplified Code Property Graph from Python source code. It leverages the `python-scalpel` library to extract detailed structural and relational information, facilitating advanced code analysis.
+
+## Project Structure
+
+This section outlines the directory structure and the key components of the Python2Graph project.
+
+- `patch/`
+  Contains Python files that provide patches for external dependencies.
+
+- `src/`
+  Contains the complete source code for the Python2Graph application.
+
+  - `src/core/`
+    Houses the core logic and functionalities of Python2Graph.
+- `cache/`
+      Manages caching mechanisms for various data types.
+      - `cache_proxy.py`: Provides a unified interface for different cache implementations.
+      - `connection.py`: Handles establishing connections to diverse caching systems.
+    - `db/`
+      Defines interfaces and implementations for database integration.
+      - `filedb/`: Implements a file-based database storage.
+      - `gremlin/`: Implements integration with Gremlin-server for graph database operations.
+      - `client.py`: An abstract base class defining the common database interface.
+    - `graph/`
+      Defines the data structures used to represent the S-CPG.
+    - `process/`
+      Orchestrates the graph building process, including frontend analysis and backend database upload.
+      - `backend/`: Handles the persistence of the constructed graph to a database.
+        - `backend_diff.py`: Implements incremental graph updates.
+        - `backend.py`: Contains the core logic for uploading the graph.
+      - `frontend/`: Performs static analysis to extract graph components from source code.
+        - `impl/`: Houses the concrete implementations for different graph types.
+          - `cfg` and `cfg_lib/`: Modules for building the Control Flow Graph (CFG).
+          - `dfg` and `dfg_lib/`: Modules for building the Data Flow Graph (DFG).
+          - `cg` and `cg_lib/`: Modules for building the Call Graph (CG).
+        - `frontend.py`: Provides a high-level, multi-threaded interface for invoking analysis.
+        - `common.py`: Contains shared utility functions for frontend operations.
+      - `collector/`: Manages the data pipeline, transferring results from the frontend analysis to the backend for persistence.
+      - `process.py`: Defines the primary interfaces and workflow orchestration for frontend analysis and backend upload.
+    
+- `src/lib/`
+    Contains common libraries and utility modules.
+  
+  - `shared/`: Provides a collection of common utility functions and shared resources.
+    - `argument.py`: Assists in parsing command-line arguments.
+    - `conf.py`: Manages the loading and resolution of configuration settings from `config.yaml`.
+  
+- `src/py2graph.py`
+    The main entry point for the Python2Graph application.
+  
+- `build.sh`
+  A shell script responsible for parsing command-line arguments and initiating the Python2Graph analysis process.
+
+## How to start
+
+Create a file named `config.yaml` in the root directory of the project, and fill in the following content:
 
 ```yaml
 BACKEND:
@@ -22,6 +77,6 @@ CACHE:
 - For `BACKEND`, you can choose `DATABASE` from `gremlin` and `filedb`. And fill in the corresponding connection string.
 - For `CACHE`, you can choose `DATABASE` from `memory` and `redis`. And fill in the corresponding `redis` connection information. If you use `redis`, you should fill the `REDIS` section, set `PASSWORD` to `null` if you don't have a password.
 
-### Build Graph
+## Build Graph
 
 See help for `build.sh`, or you can directly run `src/py2graph.py` to get more options. For detailed usage, see both files respectively.

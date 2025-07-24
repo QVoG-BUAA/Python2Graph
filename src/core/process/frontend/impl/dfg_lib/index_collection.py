@@ -86,7 +86,7 @@ class ConstantEntry:
 
     @property
     def line_no(self):
-        return self.node.line_no if self.node is not None else -1
+        return self.node.line_no if self.node is not None else 0
 
     def __eq__(self, other):
         return self.ident == other.lexeme and self.id == other.id

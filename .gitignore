@@ -9,3 +9,5 @@ tmp/
 config.yaml
 diff*.json
 run.sh
+
+.idea/

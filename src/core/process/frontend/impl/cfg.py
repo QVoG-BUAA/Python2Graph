@@ -11,6 +11,7 @@ from core.process.frontend.impl.cg_lib.cg_utils import (
     read_import_from,
     search_callees,
     update,
+    search_function_through_path
 )
 from lib.shared.task_util import Task, get_cpu_count
 from lib.shared.node_util import SrcNode, to_src_without_children
@@ -18,6 +19,7 @@ from lib.shared.logger import logger
 from lib.shared.path_util import (
     get_file_name,
     get_relative_path,
+    split_path
 )
 from core.process.frontend.frontend import FrontEndDescriptor
 from core.process.collector import Collector
@@ -48,7 +50,7 @@ def _get_no_fc_stmt(block):
 
 # def _add_vertices(ctx: CfgBuildCtx, block, visited: set):
 def _add_vertices(
-    cache_caller: dict, cache_callee: dict, ctx: CfgBuildCtx, block, visited: set
+    cache_caller: dict, cache_callee: dict, rename_map: dict, ctx: CfgBuildCtx, block, visited: set
 ):
     if block.id in visited:
         return
@@ -58,10 +60,6 @@ def _add_vertices(
 
     ctx.visited_block_first[block.id] = no_fc_stmt[0] if len(no_fc_stmt) > 0 else None
     # ctx.visited_block_last[block.id] = block.statements[-1]
-
-    # before analyzing, create a dict for rename
-
-    rename_map = OrderedDict()
 
     for statement in block.statements:
         node: SrcNode = to_src_without_children(statement)
@@ -93,8 +91,19 @@ def _add_vertices(
 
             # __update_cache(1, "caller", f"{statement.name}", v.key)
             # __update(cache_caller, 1, f"{ctx.file}:{statement.name}", v.key)
-            update(cache_caller, ctx.file.split("/"), statement.name, v.key)
+            update(cache_caller, split_path(ctx.file), statement.name, v.key)
             # logger().info(f"add caller: {ctx.file}:{statement.name};{v.key}")
+
+            # add function end vertex
+            ctx.sink.put_vertex(GraphVertex(
+                "code",
+                {
+                    "file": ctx.file,
+                    "code": f"[function end] {statement.name}",
+                    "lineno": -1 * node.line_no,
+                    "json": json_ast
+                },
+            ))
         elif isinstance(statement, ast.ImportFrom):
             # must import before use, so no need to do another loop
             full_path, new_raw_names = read_import_from(ctx, statement)
@@ -136,7 +145,7 @@ def _add_vertices(
             and each function name has a list of the files and linos(id) it appears
             """
             # match JSON and put Call
-            stmt_ast = json.dumps(ast.dump(statement))
+            stmt_ast = json.dumps(ast.dump(to_src_without_children(statement).node))
             callees = search_callees(stmt_ast)
             for callee in callees:
 
@@ -148,7 +157,7 @@ def _add_vertices(
                 else:
                     raw_name = callee
                     full_path = ctx.file
-                update(cache_callee, full_path.split("/"), raw_name, v.key)
+                update(cache_callee, split_path(full_path), raw_name, v.key)
 
         if v is not None:
             ctx.sink.put_vertex(v)
@@ -156,10 +165,12 @@ def _add_vertices(
             logger().error(f"Failed to create vertex for: {statement}")
 
     for exit in block.exits:
-        _add_vertices(cache_caller, cache_callee, ctx, exit.target, visited)
+        _add_vertices(cache_caller, cache_callee, rename_map, ctx, exit.target, visited)
 
 
-def _add_edges(ctx: CfgBuildCtx, block, visited: set, name=None):
+def _add_edges(
+        ctx: CfgBuildCtx, block, visited: set, name=None, cache_caller=None, belong_to_func_name=None
+):
     if block.id in visited:
         return
     visited.add(block.id)
@@ -191,7 +202,19 @@ def _add_edges(ctx: CfgBuildCtx, block, visited: set, name=None):
                 to_v = GraphVertex("code", {"file": ctx.file, "lineno": node.line_no})
                 ctx.sink.put_edge(GraphEdge("cfg", from_v, to_v))
     for exit in block.exits:
-        _add_edges(ctx, exit.target, visited)
+        _add_edges(ctx, exit.target, visited, cache_caller=cache_caller, belong_to_func_name=belong_to_func_name)
+
+    # add cfg and dfg from the last statement to the special vertex [function end]
+    if len(block.exits) == 0:
+        func_info = search_function_through_path(ctx.file, cache_caller)
+        if func_info is not None and belong_to_func_name in func_info:
+            line_no = -1 * int(list(func_info[belong_to_func_name])[0].split(":")[1])
+            to_v = GraphVertex("code", {"file": ctx.file, "lineno": line_no})
+            ctx.sink.put_edge(GraphEdge("cfg", from_v, to_v))
+            if len(no_fc_stmt) != 0:
+                statement = no_fc_stmt[-1]
+                if statement is not None and isinstance(statement, ast.Return) and statement.value is not None:
+                    ctx.sink.put_edge(GraphEdge("dfg", to_v, from_v))
 
 
 def _build_cfg_for_single_file(root: str, file: str, sink: Collector.Sink):
@@ -209,10 +232,11 @@ def _build_cfg_for_single_file(root: str, file: str, sink: Collector.Sink):
 
     cache_caller = cache.caller
     cache_callee = cache.callee
+    rename_map = OrderedDict()
 
     for _, cfg in flattened_cfg.items():
-        _add_vertices(cache_caller, cache_callee, ctx, cfg.entryblock, set())
-        _add_edges(ctx, cfg.entryblock, set(), name=cfg.name)
+        _add_vertices(cache_caller, cache_callee, rename_map, ctx, cfg.entryblock, set())
+        _add_edges(ctx, cfg.entryblock, set(), name=cfg.name, cache_caller=cache_caller, belong_to_func_name=cfg.name)
 
 
 def get_cfg_frontend_descriptor(

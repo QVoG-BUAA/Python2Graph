@@ -4,6 +4,7 @@ from lib.shared.logger import logger
 from lib.shared.path_util import (
     module_2_path,
     last_longest_prefix_matches,
+    split_path
 )
 from core.cache.connection import get_cache_proxy
 import re
@@ -41,8 +42,8 @@ def update_cache(deck: int, *args: str):
     cache.set(args[0], update(cache.get(args[0]), deck, args[1:]))
 
 
-def update(temp_dict: dict, args: str, name: str, lino: str):
-    if args == None:
+def update(temp_dict: dict, args: list, name: str, lino: str):
+    if args is None:
         if name not in temp_dict:
             temp_dict[name] = set()
         temp_dict[name].add(lino)
@@ -51,13 +52,13 @@ def update(temp_dict: dict, args: str, name: str, lino: str):
     elif len(args) == 1:
         # fill the dict
         # no recover but append, this need to check if the value is dict
-        if temp_dict == None:
+        if temp_dict is None:
             logger().info("NOOOOOONE!")
-        if args[0] not in temp_dict or temp_dict[args[0]] == None:
+        if args[0] not in temp_dict or temp_dict[args[0]] is None:
             temp_dict[args[0]] = dict()
         temp_dict[args[0]] = update(temp_dict[args[0]], None, name, lino)
     else:
-        if args[0] not in temp_dict or temp_dict[args[0]] == None:
+        if args[0] not in temp_dict or temp_dict[args[0]] is None:
             temp_dict[args[0]] = dict()
         temp_dict[args[0]] = update(temp_dict[args[0]], args[1:], name, lino)
     return temp_dict
@@ -91,3 +92,13 @@ def not_appeared_and_add(caller_file: str, callee_file: str, related_edge: dict)
             return True
         else:
             return False
+
+def search_function_through_path(path, cache):
+    path_list = split_path(path)
+    current = cache
+    for f in path_list:
+        if f in current:
+            current = current[f]
+        else:
+            return None
+    return current

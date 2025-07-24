@@ -12,6 +12,7 @@ from core.db.client import DbClient
 from gremlin_python.structure.graph import GraphTraversalSource
 from gremlin_python.process.graph_traversal import GraphTraversal
 from gremlin_python.process.graph_traversal import __
+from core.process.frontend.impl.cg_lib.cg_db import get_cg_db_transformed
 
 
 @deprecated("This function has performance issue. Use _fetch_vertex_id instead.")
@@ -63,6 +64,7 @@ class GremlinClient(DbClient):
     """
 
     def __init__(self, g: GraphTraversalSource, cache: CacheProxy) -> None:
+        self.cache_cg_db_transformed = get_cg_db_transformed()
         self._g: GraphTraversalSource = g
         self.cache: CacheProxy = cache
 
@@ -127,7 +129,15 @@ class GremlinClient(DbClient):
         except StopIteration:
             logger().error(f"Missing vertex: {edge.to_v}")
             return it, False
-        iterator = it.add_e(edge.label).from_(__.V(_from_id)).to(__.V(_to_id))
+        # print(f"self.cache_cg_db: {self.cache_cg_db_transformed}")
+        if edge.label == "dfg" and edge.from_v.key in self.cache_cg_db_transformed["callee"] \
+                and edge.to_v.key in self.cache_cg_db_transformed["caller"] and \
+                set(self.cache_cg_db_transformed["callee"][edge.from_v.key]) & \
+                set(self.cache_cg_db_transformed["caller"][edge.to_v.key]):
+            iterator = it.add_e(edge.label).from_(__.V(_to_id)).to(__.V(_from_id))
+            # print(f"add edge: {edge.label} from {edge.from_v.key} to {edge.to_v.key}")
+        else:
+            iterator = it.add_e(edge.label).from_(__.V(_from_id)).to(__.V(_to_id))
         if edge.props is not None:
             for k, v in edge.props.items():
                 iterator = iterator.property(k, v)
@@ -139,6 +149,8 @@ class GremlinClient(DbClient):
             iterator.iterate()
 
     def add_edge_bulk(self, edges: List[GraphEdge]):
+        self.cache_cg_db_transformed = get_cg_db_transformed()
+        # print(f"cache_cg_db: {self.cache_cg_db_transformed}")
         max_retry = 3
         count = 0
         while count < max_retry:
